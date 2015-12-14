@@ -1,14 +1,39 @@
 package main
 
 import (
+	"fmt"
+	"log"
+	"net/http"
+	"sync"
 	"image"
 	"image/color"
 	"image/gif"
-	"io"
 	"math"
 	"math/rand"
-	"os"
 )
+
+var mu sync.Mutex
+var count int
+
+func main() {
+	http.HandleFunc("/", handler)
+	http.HandleFunc("/count", counter)
+	http.HandleFunc("/lissajous", lissajous)
+	log.Fatal(http.ListenAndServe("localhost:8000", nil))
+}
+
+func handler (w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
+	count++
+	mu.Unlock()
+	fmt.Fprintf(w, "URL.Path = %q\n", r.URL.Path)
+}
+
+func counter(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
+	fmt.Fprintf(w, "Count %d\n", count)
+	mu.Unlock()
+}
 
 var palette = []color.Color{
 	color.Black,
@@ -22,11 +47,7 @@ const (
 	blueIndex  = 3
 )
 
-func main() {
-	lissajous(os.Stdout)
-}
-
-func lissajous(out io.Writer) {
+func lissajous(w http.ResponseWriter, r *http.Request) {
 	const (
 		cycles  = 5
 		res     = 0.001
@@ -50,5 +71,5 @@ func lissajous(out io.Writer) {
 		anim.Delay = append(anim.Delay, delay)
 		anim.Image = append(anim.Image, img)
 	}
-	gif.EncodeAll(out, &anim)
+	gif.EncodeAll(w, &anim)
 }
