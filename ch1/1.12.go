@@ -10,6 +10,7 @@ import (
 	"image/gif"
 	"math"
 	"math/rand"
+	"strconv"
 )
 
 var mu sync.Mutex
@@ -33,6 +34,15 @@ func counter(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	fmt.Fprintf(w, "Count %d\n", count)
 	mu.Unlock()
+	fmt.Fprintf(w, "URL.Path = %q\n", r.URL.Path)
+
+	if err := r.ParseForm(); err != nil {
+		fmt.Fprintf(w, "Failed to parse the form")
+	}
+
+	for k, v := range r.Form {
+		fmt.Fprintf(w, "Form[%q] = %q\n", k, v)
+	}
 }
 
 var palette = []color.Color{
@@ -49,12 +59,30 @@ const (
 
 func lissajous(w http.ResponseWriter, r *http.Request) {
 	const (
-		cycles  = 5
 		res     = 0.001
 		size    = 100
 		nframes = 64
 		delay   = 8
 	)
+
+	cycles := 5.0
+
+	if err := r.ParseForm(); err != nil {
+		fmt.Fprintf(w, "Failed to parse the form\n")
+		return
+	}
+
+	for k, v := range r.Form {
+		if "cycles" == k {
+			token := v[0]
+			cyclesInt, err := strconv.Atoi(token)
+			if err != nil {
+				fmt.Fprintf(w, "Failed to parse cycle input\n")
+				return
+			}
+			cycles = float64(cyclesInt)
+		}
+	}
 
 	freq := rand.Float64() * 3.0
 	anim := gif.GIF{LoopCount: nframes}
