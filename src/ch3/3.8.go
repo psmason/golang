@@ -5,15 +5,17 @@ import (
 	"image/color"
 	"image/png"
 	"math/big"
+	"math/rand"
 	"os"
 )
 
-func main() {
-	const (
-		xmin, ymin, xmax, ymax = 0, -0.5, 0.5, 0.0
-		width, height          = 1024, 1024
-	)
+const (
+	xmin, ymin, xmax, ymax = -2.0, -0.25, -1.75, 0.25
+	width, height          = 1024, 1024
+	iterations             = 250
+)
 
+func main() {
 	widthF := big.NewFloat(float64(width))
 	heightF := big.NewFloat(float64(width))
 	iWidthF := Inv(widthF)
@@ -22,17 +24,19 @@ func main() {
 	yminF := big.NewFloat(ymin)
 	xmaxF := big.NewFloat(xmax)
 	ymaxF := big.NewFloat(ymax)
-	yDiff := Sub(ymaxF, yminF)
-	xDiff := Sub(xmaxF, xminF)
-
+	yAdj := Mul(iHeightF,Sub(ymaxF, yminF))
+	xAdj := Mul(iWidthF, Sub(xmaxF, xminF))
+	ySampleWidth,_ := Mul(yAdj, big.NewFloat(0.5)).Float64()
+	xSampleWidth,_ := Mul(xAdj, big.NewFloat(0.5)).Float64()
+	
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for py := 0; py < height; py++ {
 		pyF := big.NewFloat(float64(py))
-		y := Add(Mul(Mul(pyF, iHeightF), yDiff), yminF)
+		y := Add(Mul(pyF, yAdj), yminF)
 		for px := 0; px < width; px++ {
 			pxF := big.NewFloat(float64(px))
-			x := Add(Mul(Mul(pxF, iWidthF), xDiff), xminF)
-			img.Set(px, py, mandelbrot(x, y))
+			x := Add(Mul(pxF, xAdj), xminF)
+			img.Set(px, py, mandelbrotSample(x, y, xSampleWidth, ySampleWidth, 8))
 			// note the coordinates increase right and down
 		}
 	}
@@ -44,21 +48,38 @@ func computeColor(n uint8) color.Color {
 	// faster the escape (fewer iterations), the closer
 	// the color is to sky blue.
 
+	if n > uint8(iterations) {
+		return color.Black
+	}
+
 	const alpha = 255
 	const contrast = 10
 
 	var red, blue, green uint8
 	red, blue, green = 135, 206, 250
 
-	red = uint8(float64(red) * (1 - float64(contrast)*float64(n)/200))
-	blue = uint8(float64(blue) * (1 - float64(contrast)*float64(n)/200))
-	green = uint8(float64(green) * (1 - float64(contrast)*float64(n)/200))
+	red = uint8(float64(red) * (1 - float64(contrast)*float64(n)/iterations))
+	blue = uint8(float64(blue) * (1 - float64(contrast)*float64(n)/iterations))
+	green = uint8(float64(green) * (1 - float64(contrast)*float64(n)/iterations))
 
 	return color.RGBA{red, blue, green, alpha}
 }
 
-func mandelbrot(a, b *big.Float) color.Color {
-	const iterations = 200
+func mandelbrotSample(a *big.Float, b *big.Float, xSampleWidth float64, ySampleWidth float64, n uint8) color.Color {
+	total := 0.0
+	for i := uint8(0); i<n; i++ {
+		xEps := rand.Float64() * xSampleWidth
+		yEps := rand.Float64() * ySampleWidth
+		xSample := Add(big.NewFloat(xEps), a)
+		ySample := Add(big.NewFloat(yEps), b)
+		total = total + float64(mandelbrot(xSample, ySample))
+	}
+
+	average := uint8(total/float64(n))
+	return computeColor(average)
+}
+
+func mandelbrot(a, b *big.Float) uint8 {
 	const contrast = 15
 
 	vA := big.NewFloat(0)
@@ -73,10 +94,10 @@ func mandelbrot(a, b *big.Float) color.Color {
 		escape := Add(Mul(vA, vA), Mul(vB, vB))
 		if Greater(escape, f4) >= 0 {
 			//return color.Gray{255 - contrast*n}
-			return computeColor(n)
+			return n
 		}
 	}
-	return color.Black
+	return iterations
 }
 
 func Mul(x, y *big.Float) *big.Float {
