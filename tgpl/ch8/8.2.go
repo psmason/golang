@@ -18,14 +18,15 @@ const (
 	portCommand   = "PORT"
 	listCommand   = "LIST"
 	typeCommand   = "TYPE"
-	
-	greeting      = "220 hello!"
-	authenticated = "230 ok we're good!"
-	system        = "215 pile_of_garbage"
-	portResponse  = "200 PORT successful"
-	listOpen      = "150 opening for LIST"
-	listComplete  = "226 LIST completed"
-	typeResponse  = "200 Type set to A"
+
+	greeting            = "220 hello!"
+	authenticated       = "230 ok we're good!"
+	system              = "215 pile_of_garbage"
+	portResponse        = "200 PORT successful"
+	listOpen            = "150 opening for LIST"
+	listComplete        = "226 LIST completed"
+	typeResponse        = "200 Type set to A"
+	unsupportedResponse = "500 unknown command"
 )
 
 func writeToConnection(c net.Conn, data string) {
@@ -46,7 +47,7 @@ func processSyst(c net.Conn) {
 }
 
 func processType(c net.Conn) {
-	writeToConnection(c, typeResponse + "\n")
+	writeToConnection(c, typeResponse+"\n")
 }
 
 func processPort(commandConnection net.Conn, dataConnection *net.Conn, destinationString string) {
@@ -73,12 +74,16 @@ func processList(commandConnection, dataConnection net.Conn) {
 	// RFC 959, section 3.4. Transmission modes
 	// http://stackoverflow.com/questions/37187986/bare-linefeeds-received-in-ascii-mode-warning-when-listing-directory-on-my-ftp
 	// see above for carriage return usage
-	writeToConnection(commandConnection, listOpen + "\n")
-	out, _ := exec.Command("ls").Output()	
+	writeToConnection(commandConnection, listOpen+"\n")
+	out, _ := exec.Command("ls").Output()
 	data := strings.Replace(string(out), "\n", "\r\n", -1)
-	writeToConnection(dataConnection, data + "\r")
+	writeToConnection(dataConnection, data+"\r")
 	dataConnection.Close()
-	writeToConnection(commandConnection, listComplete + "\n")
+	writeToConnection(commandConnection, listComplete+"\n")
+}
+
+func processUnknown(c net.Conn) {
+	writeToConnection(c, unsupportedResponse+"\n")
 }
 
 func processCommand(commandConnection net.Conn, dataConnection *net.Conn, commandData string) {
@@ -98,6 +103,8 @@ func processCommand(commandConnection net.Conn, dataConnection *net.Conn, comman
 		processList(commandConnection, *dataConnection)
 	case typeCommand:
 		processType(commandConnection)
+	default:
+		processUnknown(commandConnection)
 	}
 }
 
